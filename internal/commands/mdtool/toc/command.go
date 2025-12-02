@@ -36,6 +36,11 @@ func Command() *cli.Command {
 				Aliases: []string{"o"},
 				Usage:   "使用有序列表 (1. 2. 3.)",
 			},
+			&cli.BoolFlag{
+				Name:    "line-number",
+				Aliases: []string{"L"},
+				Usage:   "显示行号范围 (:start-end)",
+			},
 		},
 		Action: action,
 	}

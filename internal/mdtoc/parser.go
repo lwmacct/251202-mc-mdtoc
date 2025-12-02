@@ -35,6 +35,10 @@ func (p *Parser) Parse(content []byte) ([]*Header, error) {
 	// 重置锚点生成器
 	p.anchor.Reset()
 
+	// 预计算行号映射 (byte offset -> line number)
+	lineMap := buildLineMap(content)
+	totalLines := countLines(content)
+
 	// 解析为 AST
 	reader := text.NewReader(content)
 	doc := p.md.Parser().Parse(reader)
@@ -63,16 +67,83 @@ func (p *Parser) Parse(content []byte) ([]*Header, error) {
 		// 生成 anchor link
 		anchor := p.anchor.Generate(text)
 
+		// 获取行号
+		line := getNodeLine(heading, lineMap)
+
 		headers = append(headers, &Header{
 			Level:      heading.Level,
 			Text:       text,
 			AnchorLink: anchor,
+			Line:       line,
 		})
 
 		return ast.WalkSkipChildren, nil
 	})
 
+	// 计算每个标题的结束行
+	calculateEndLines(headers, totalLines)
+
 	return headers, err
+}
+
+// buildLineMap 构建 byte offset 到行号的映射
+func buildLineMap(content []byte) []int {
+	// lineMap[i] = 第 i 个字节所在的行号 (1-based)
+	lineMap := make([]int, len(content)+1)
+	line := 1
+	for i, b := range content {
+		lineMap[i] = line
+		if b == '\n' {
+			line++
+		}
+	}
+	lineMap[len(content)] = line
+	return lineMap
+}
+
+// countLines 计算总行数
+func countLines(content []byte) int {
+	if len(content) == 0 {
+		return 0
+	}
+	lines := 1
+	for _, b := range content {
+		if b == '\n' {
+			lines++
+		}
+	}
+	// 如果最后一个字符是换行，不额外计数
+	if len(content) > 0 && content[len(content)-1] == '\n' {
+		lines--
+	}
+	return lines
+}
+
+// getNodeLine 获取节点所在行号
+func getNodeLine(n ast.Node, lineMap []int) int {
+	if n.Lines().Len() > 0 {
+		start := n.Lines().At(0).Start
+		if start < len(lineMap) {
+			return lineMap[start]
+		}
+	}
+	return 0
+}
+
+// calculateEndLines 计算每个标题的结束行
+func calculateEndLines(headers []*Header, totalLines int) {
+	for i, h := range headers {
+		if i+1 < len(headers) {
+			// 下一个标题的前一行
+			h.EndLine = headers[i+1].Line - 1
+			if h.EndLine < h.Line {
+				h.EndLine = h.Line
+			}
+		} else {
+			// 最后一个标题，到文件末尾
+			h.EndLine = totalLines
+		}
+	}
 }
 
 // extractText 从标题节点提取纯文本内容

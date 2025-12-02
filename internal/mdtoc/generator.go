@@ -43,8 +43,16 @@ func (g *Generator) Generate(headers []*Header) string {
 			marker = "-"
 		}
 
+		// 生成链接
+		link := "[" + h.Text + "](#" + h.AnchorLink + ")"
+
+		// 添加行号范围 (VS Code 兼容格式)
+		if g.options.LineNumber && h.Line > 0 {
+			link += " `:" + itoa(h.Line) + "-" + itoa(h.EndLine) + "`"
+		}
+
 		// 生成 TOC 行
-		line := indentStr + marker + " [" + h.Text + "](#" + h.AnchorLink + ")"
+		line := indentStr + marker + " " + link
 		sb.WriteString(line)
 
 		// 除最后一行外添加换行符

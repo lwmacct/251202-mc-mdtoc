@@ -20,6 +20,7 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	inPlace := cmd.Bool("in-place")
 	diff := cmd.Bool("diff")
 	ordered := cmd.Bool("ordered")
+	lineNumber := cmd.Bool("line-number")
 
 	// 获取文件参数
 	file := cmd.Args().First()
@@ -50,13 +51,15 @@ func action(ctx context.Context, cmd *cli.Command) error {
 		"in_place", inPlace,
 		"diff", diff,
 		"ordered", ordered,
+		"line_number", lineNumber,
 	)
 
 	// 创建 TOC 实例
 	toc := mdtoc.New(mdtoc.Options{
-		MinLevel: int(minLevel),
-		MaxLevel: int(maxLevel),
-		Ordered:  ordered,
+		MinLevel:   int(minLevel),
+		MaxLevel:   int(maxLevel),
+		Ordered:    ordered,
+		LineNumber: lineNumber,
 	})
 
 	// 根据模式执行不同操作

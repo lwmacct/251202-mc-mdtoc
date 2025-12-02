@@ -130,3 +130,67 @@ And a list:
 		t.Errorf("Parse() returned %d headers for content without headers, want 0", len(got))
 	}
 }
+
+func TestParser_LineNumbers(t *testing.T) {
+	content := `# Title
+
+## Section 1
+Content...
+
+## Section 2
+More content...
+`
+	p := NewParser(DefaultOptions())
+	got, err := p.Parse([]byte(content))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	expected := []struct {
+		text    string
+		line    int
+		endLine int
+	}{
+		{"Title", 1, 2},
+		{"Section 1", 3, 5},
+		{"Section 2", 6, 7},
+	}
+
+	if len(got) != len(expected) {
+		t.Fatalf("Parse() returned %d headers, want %d", len(got), len(expected))
+	}
+
+	for i, h := range got {
+		exp := expected[i]
+		if h.Text != exp.text {
+			t.Errorf("Header[%d].Text = %q, want %q", i, h.Text, exp.text)
+		}
+		if h.Line != exp.line {
+			t.Errorf("Header[%d].Line = %d, want %d", i, h.Line, exp.line)
+		}
+		if h.EndLine != exp.endLine {
+			t.Errorf("Header[%d].EndLine = %d, want %d", i, h.EndLine, exp.endLine)
+		}
+	}
+}
+
+func TestCountLines(t *testing.T) {
+	tests := []struct {
+		content  string
+		expected int
+	}{
+		{"", 0},
+		{"line1", 1},
+		{"line1\n", 1},
+		{"line1\nline2", 2},
+		{"line1\nline2\n", 2},
+		{"line1\nline2\nline3", 3},
+	}
+
+	for _, tt := range tests {
+		got := countLines([]byte(tt.content))
+		if got != tt.expected {
+			t.Errorf("countLines(%q) = %d, want %d", tt.content, got, tt.expected)
+		}
+	}
+}

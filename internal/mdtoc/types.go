@@ -6,13 +6,16 @@ type Header struct {
 	Level      int    // 标题层级 (1-6)
 	Text       string // 标题文本 (原始文本，去除 # 和前后空格)
 	AnchorLink string // 锚点链接 (GitHub 风格)
+	Line       int    // 标题所在行 (1-based)
+	EndLine    int    // 内容结束行 (1-based)，下一个标题前一行或文件末尾
 }
 
 // Options 配置 TOC 生成选项
 type Options struct {
-	MinLevel int  // 最小标题层级 (默认 1)
-	MaxLevel int  // 最大标题层级 (默认 3)
-	Ordered  bool // 使用有序列表
+	MinLevel   int  // 最小标题层级 (默认 1)
+	MaxLevel   int  // 最大标题层级 (默认 3)
+	Ordered    bool // 使用有序列表
+	LineNumber bool // 显示行号范围 (:start-end)
 }
 
 // DefaultOptions 返回默认配置

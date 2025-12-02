@@ -194,6 +194,11 @@ func processStdout(baseOpts mdtoc.Options, files []string) error {
 			continue
 		}
 
+		// 跳过空的 TOC
+		if strings.TrimSpace(tocStr) == "" {
+			continue
+		}
+
 		// 多文件时添加文件名标题
 		if len(files) > 1 {
 			fmt.Printf("## %s\n\n", file)

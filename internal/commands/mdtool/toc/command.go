@@ -54,6 +54,11 @@ func Command() *cli.Command {
 				Aliases: []string{"g"},
 				Usage:   "全局模式: 生成完整文档的单一目录 (默认为章节模式)",
 			},
+			&cli.BoolFlag{
+				Name:    "anchor",
+				Aliases: []string{"a"},
+				Usage:   "预览时显示锚点链接 [标题](#anchor)",
+			},
 		},
 		Action: action,
 	}

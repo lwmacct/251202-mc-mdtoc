@@ -24,6 +24,7 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	lineNumber := cmd.Bool("line-number")
 	showPath := cmd.Bool("path")
 	globalMode := cmd.Bool("global")
+	showAnchor := cmd.Bool("anchor")
 
 	// 验证层级参数
 	if minLevel < 1 || minLevel > 6 {
@@ -52,14 +53,21 @@ func action(ctx context.Context, cmd *cli.Command) error {
 		LineNumber: lineNumber,
 		ShowPath:   showPath,
 		SectionTOC: !globalMode,
+		ShowAnchor: showAnchor, // 预览模式使用用户指定值
 	}
 
 	// 根据模式执行不同操作
 	switch {
 	case diff:
-		return processDiff(mdtoc.New(baseOpts), files)
+		// diff 和 inPlace 模式强制启用 ShowAnchor（写入文件必须有链接）
+		writeOpts := baseOpts
+		writeOpts.ShowAnchor = true
+		return processDiff(mdtoc.New(writeOpts), files)
 	case inPlace:
-		return processInPlace(mdtoc.New(baseOpts), files)
+		// diff 和 inPlace 模式强制启用 ShowAnchor（写入文件必须有链接）
+		writeOpts := baseOpts
+		writeOpts.ShowAnchor = true
+		return processInPlace(mdtoc.New(writeOpts), files)
 	default:
 		return processStdout(baseOpts, files)
 	}

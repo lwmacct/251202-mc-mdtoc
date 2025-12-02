@@ -43,8 +43,13 @@ func (g *Generator) Generate(headers []*Header) string {
 			marker = "-"
 		}
 
-		// 生成链接
-		link := "[" + h.Text + "](#" + h.AnchorLink + ")"
+		// 生成链接或纯文本
+		var link string
+		if g.options.ShowAnchor {
+			link = "[" + h.Text + "](#" + h.AnchorLink + ")"
+		} else {
+			link = h.Text
+		}
 
 		// 添加行号范围 (VS Code 兼容格式)
 		if g.options.LineNumber && h.Line > 0 {
@@ -127,7 +132,12 @@ func (g *Generator) GenerateSection(section *Section) string {
 			marker = "-"
 		}
 
-		link := "[" + h.Text + "](#" + h.AnchorLink + ")"
+		var link string
+		if g.options.ShowAnchor {
+			link = "[" + h.Text + "](#" + h.AnchorLink + ")"
+		} else {
+			link = h.Text
+		}
 		if g.options.LineNumber && h.Line > 0 {
 			if g.options.ShowPath && g.options.FilePath != "" {
 				link += " `" + g.options.FilePath + ":" + itoa(h.Line) + ":" + itoa(h.EndLine) + "`"

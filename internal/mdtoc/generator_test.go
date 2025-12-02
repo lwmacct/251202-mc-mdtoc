@@ -25,7 +25,7 @@ func TestGenerator_Generate(t *testing.T) {
 				{Level: 2, Text: "Section 1", AnchorLink: "section-1"},
 				{Level: 2, Text: "Section 2", AnchorLink: "section-2"},
 			},
-			opts: DefaultOptions(),
+			opts: Options{MinLevel: 1, MaxLevel: 3, ShowAnchor: true},
 			expected: `- [Title](#title)
   - [Section 1](#section-1)
   - [Section 2](#section-2)`,
@@ -38,7 +38,7 @@ func TestGenerator_Generate(t *testing.T) {
 				{Level: 3, Text: "Subsection 1.1", AnchorLink: "subsection-11"},
 				{Level: 2, Text: "Section 2", AnchorLink: "section-2"},
 			},
-			opts: DefaultOptions(),
+			opts: Options{MinLevel: 1, MaxLevel: 3, ShowAnchor: true},
 			expected: `- [Title](#title)
   - [Section 1](#section-1)
     - [Subsection 1.1](#subsection-11)
@@ -51,7 +51,7 @@ func TestGenerator_Generate(t *testing.T) {
 				{Level: 2, Text: "Section 1", AnchorLink: "section-1"},
 				{Level: 2, Text: "Section 2", AnchorLink: "section-2"},
 			},
-			opts: Options{MinLevel: 1, MaxLevel: 3, Ordered: true},
+			opts: Options{MinLevel: 1, MaxLevel: 3, Ordered: true, ShowAnchor: true},
 			expected: `1. [Title](#title)
   1. [Section 1](#section-1)
   2. [Section 2](#section-2)`,
@@ -62,7 +62,7 @@ func TestGenerator_Generate(t *testing.T) {
 				{Level: 1, Text: "Title", AnchorLink: "title", Line: 1, EndLine: 10},
 				{Level: 2, Text: "Section 1", AnchorLink: "section-1", Line: 11, EndLine: 20},
 			},
-			opts: Options{MinLevel: 1, MaxLevel: 3, LineNumber: true},
+			opts: Options{MinLevel: 1, MaxLevel: 3, LineNumber: true, ShowAnchor: true},
 			expected: "- [Title](#title) `:1:10`\n  - [Section 1](#section-1) `:11:20`",
 		},
 	}
@@ -110,7 +110,7 @@ func TestGenerator_GenerateSection(t *testing.T) {
 					{Level: 3, Text: "Subsection 1.2.1", AnchorLink: "subsection-121"},
 				},
 			},
-			opts: Options{MinLevel: 2, MaxLevel: 3},
+			opts: Options{MinLevel: 2, MaxLevel: 3, ShowAnchor: true},
 			expected: `- [Section 1.1](#section-11)
 - [Section 1.2](#section-12)
   - [Subsection 1.2.1](#subsection-121)`,
@@ -125,7 +125,7 @@ func TestGenerator_GenerateSection(t *testing.T) {
 					{Level: 4, Text: "Deep 1.1.1.1", AnchorLink: "deep-1111"},
 				},
 			},
-			opts: Options{MinLevel: 2, MaxLevel: 2}, // Only H2
+			opts: Options{MinLevel: 2, MaxLevel: 2, ShowAnchor: true}, // Only H2
 			expected: `- [Section 1.1](#section-11)`,
 		},
 		{
@@ -137,7 +137,7 @@ func TestGenerator_GenerateSection(t *testing.T) {
 					{Level: 2, Text: "Section 1.2", AnchorLink: "section-12"},
 				},
 			},
-			opts: Options{MinLevel: 2, MaxLevel: 3, Ordered: true},
+			opts: Options{MinLevel: 2, MaxLevel: 3, Ordered: true, ShowAnchor: true},
 			expected: `1. [Section 1.1](#section-11)
 2. [Section 1.2](#section-12)`,
 		},
@@ -150,7 +150,7 @@ func TestGenerator_GenerateSection(t *testing.T) {
 					{Level: 2, Text: "Section 1.2", AnchorLink: "section-12", Line: 16, EndLine: 25},
 				},
 			},
-			opts: Options{MinLevel: 2, MaxLevel: 3, LineNumber: true},
+			opts: Options{MinLevel: 2, MaxLevel: 3, LineNumber: true, ShowAnchor: true},
 			expected: "- [Section 1.1](#section-11) `:6:15`\n- [Section 1.2](#section-12) `:16:25`",
 		},
 	}
@@ -179,7 +179,7 @@ func TestGenerator_GenerateSection_RelativeIndent(t *testing.T) {
 		},
 	}
 
-	g := NewGenerator(Options{MinLevel: 1, MaxLevel: 6})
+	g := NewGenerator(Options{MinLevel: 1, MaxLevel: 6, ShowAnchor: true})
 	got := g.GenerateSection(section)
 
 	// H2 should be at root level (no indent), H3 indented by 2, H4 by 4
@@ -236,7 +236,7 @@ func TestGenerator_GenerateSection_RequiresH2(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := NewGenerator(Options{MinLevel: 2, MaxLevel: 6})
+			g := NewGenerator(Options{MinLevel: 2, MaxLevel: 6, ShowAnchor: true})
 			got := g.GenerateSection(tt.section)
 			if got != tt.expected {
 				t.Errorf("GenerateSection() =\n%q\nwant:\n%q", got, tt.expected)

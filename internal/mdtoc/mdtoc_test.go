@@ -31,7 +31,7 @@ func TestTOC_GenerateFromContent(t *testing.T) {
 ## 安装说明
 
 ## 使用方法`,
-			opts: mdtoc.Options{MinLevel: 1, MaxLevel: 3},
+			opts: mdtoc.Options{MinLevel: 1, MaxLevel: 3, ShowAnchor: true},
 			contains: []string{
 				"[项目简介](#项目简介)",
 				"[功能特性](#功能特性)",
@@ -48,7 +48,7 @@ func TestTOC_GenerateFromContent(t *testing.T) {
 ### Subsection
 #### Deep
 ## Section 2`,
-			opts:     mdtoc.Options{MinLevel: 2, MaxLevel: 2},
+			opts:     mdtoc.Options{MinLevel: 2, MaxLevel: 2, ShowAnchor: true},
 			contains: []string{"[Section 1]", "[Section 2]"},
 			excludes: []string{"[Title]", "[Subsection]", "[Deep]"},
 		},
@@ -57,7 +57,7 @@ func TestTOC_GenerateFromContent(t *testing.T) {
 			content: `# Title
 ## Section 1
 ## Section 2`,
-			opts:     mdtoc.Options{MinLevel: 1, MaxLevel: 2, Ordered: true},
+			opts:     mdtoc.Options{MinLevel: 1, MaxLevel: 2, Ordered: true, ShowAnchor: true},
 			contains: []string{"1.", "2."},
 			excludes: []string{"- ["},
 		},
@@ -70,13 +70,13 @@ func TestTOC_GenerateFromContent(t *testing.T) {
 Content here
 
 ## Section 2`,
-			opts:     mdtoc.Options{MinLevel: 1, MaxLevel: 2, LineNumber: true},
+			opts:     mdtoc.Options{MinLevel: 1, MaxLevel: 2, LineNumber: true, ShowAnchor: true},
 			contains: []string{"`:", "-"},
 		},
 		{
 			name: "code block headers ignored",
 			content: "# Real Header\n```markdown\n# Fake Header\n```\n## Another Real",
-			opts:     mdtoc.Options{MinLevel: 1, MaxLevel: 2},
+			opts:     mdtoc.Options{MinLevel: 1, MaxLevel: 2, ShowAnchor: true},
 			contains: []string{"[Real Header]", "[Another Real]"},
 			excludes: []string{"[Fake Header]"},
 		},
@@ -87,7 +87,7 @@ Content here
 ## POST
 ## GET
 ## GET`,
-			opts: mdtoc.Options{MinLevel: 1, MaxLevel: 2},
+			opts: mdtoc.Options{MinLevel: 1, MaxLevel: 2, ShowAnchor: true},
 			contains: []string{
 				"(#get)",
 				"(#get-1)",
@@ -141,6 +141,7 @@ func TestTOC_SectionMode(t *testing.T) {
 		MinLevel:   2,
 		MaxLevel:   3,
 		SectionTOC: true,
+		ShowAnchor: true,
 	})
 
 	preview, err := toc.GenerateSectionTOCsPreview([]byte(content))
@@ -366,6 +367,7 @@ Old TOC content
 			MinLevel:   2,
 			MaxLevel:   3,
 			SectionTOC: true,
+			ShowAnchor: true, // 写入文件时必须显示链接
 		})
 		if err := toc.UpdateFile(filePath); err != nil {
 			t.Fatal(err)

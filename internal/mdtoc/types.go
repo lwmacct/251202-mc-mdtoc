@@ -19,6 +19,7 @@ type Options struct {
 	ShowPath   bool   // 显示文件路径 (path:start:end)
 	FilePath   string // 当前处理的文件路径
 	SectionTOC bool   // 章节模式：每个 H1 后生成独立的子目录
+	ShowAnchor bool   // 显示锚点链接 [标题](#anchor)，预览默认 false，写入强制 true
 }
 
 // Section 表示一个章节 (H1 及其子标题)
@@ -33,7 +34,8 @@ func DefaultOptions() Options {
 		MinLevel:   1,
 		MaxLevel:   3,
 		Ordered:    false,
-		SectionTOC: true, // 默认启用章节模式：在每个 H1 下生成独立子目录
+		SectionTOC: true,       // 默认启用章节模式：在每个 H1 下生成独立子目录
+		ShowAnchor: true,       // 默认生成链接格式 [标题](#anchor)
 	}
 }
 

@@ -14,7 +14,11 @@ Markdown CLI 工具集，提供目录生成、格式化、检查等功能。
 ## 安装
 
 ```shell
+# 从 GitHub 安装 (需要先发布)
 go install github.com/lwmacct/251202-mc-mdtool/cmd/mc-mdtool@latest
+
+# 本地构建安装
+go install ./cmd/mc-mdtool
 ```
 
 ## 使用示例
@@ -27,12 +31,29 @@ mc-mdtool toc --help
 # 生成 TOC 到 stdout
 mc-mdtool toc README.md
 
+# 显示行号范围 (VS Code 兼容格式)
+mc-mdtool toc -L README.md
+
 # 原地更新文件 (在 <!--TOC--> 标记处插入)
 mc-mdtool toc -i README.md
 
 # 检查 TOC 是否需要更新 (CI 场景)
 mc-mdtool toc -d README.md
+
+# 使用有序列表 + 指定层级
+mc-mdtool toc -o -m 2 -M 4 README.md
 ```
+
+### toc 命令选项
+
+| 选项 | 短选项 | 说明 |
+|------|--------|------|
+| `--min-level` | `-m` | 最小标题层级 (默认 1) |
+| `--max-level` | `-M` | 最大标题层级 (默认 3) |
+| `--in-place` | `-i` | 原地更新文件 |
+| `--diff` | `-d` | 检查是否需要更新 |
+| `--ordered` | `-o` | 使用有序列表 |
+| `--line-number` | `-L` | 显示行号范围 `:start-end` |
 
 ## 开发
 

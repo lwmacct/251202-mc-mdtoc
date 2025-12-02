@@ -538,3 +538,267 @@ func TestMarkerHandler_EmptyMarker(t *testing.T) {
 		t.Error("Should find default marker when empty string provided")
 	}
 }
+
+// ==================== YAML Frontmatter Tests ====================
+
+func TestFindFrontmatterEnd(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected int
+	}{
+		{
+			name:     "no frontmatter",
+			content:  "# Title\nContent",
+			expected: -1,
+		},
+		{
+			name:     "frontmatter with dash closer",
+			content:  "---\ntitle: Test\n---\n# Title",
+			expected: 2,
+		},
+		{
+			name:     "frontmatter with dots closer",
+			content:  "---\ntitle: Test\n...\n# Title",
+			expected: 2,
+		},
+		{
+			name:     "frontmatter with YAML comment",
+			content:  "---\n# This is a YAML comment\ntitle: Test\n---\n# Real Title",
+			expected: 3,
+		},
+		{
+			name:     "unclosed frontmatter",
+			content:  "---\ntitle: Test\n# Not closed",
+			expected: -1,
+		},
+		{
+			name:     "dash not on first line - not frontmatter",
+			content:  "Some text\n---\ntitle: Test\n---",
+			expected: -1,
+		},
+		{
+			name:     "empty content",
+			content:  "",
+			expected: -1,
+		},
+		{
+			name:     "VitePress style frontmatter",
+			content:  "---\n# https://vitepress.dev/reference/default-theme-home-page\nlayout: home\n---\n# Real Title",
+			expected: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lines := strings.Split(tt.content, "\n")
+			lineBytes := make([][]byte, len(lines))
+			for i, l := range lines {
+				lineBytes[i] = []byte(l)
+			}
+			got := FindFrontmatterEnd(lineBytes)
+			if got != tt.expected {
+				t.Errorf("FindFrontmatterEnd() = %d, want %d", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMarkerHandler_FindFirstHeading_WithFrontmatter(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected int
+	}{
+		{
+			name: "frontmatter with YAML comment - should skip",
+			content: `---
+# This is a YAML comment, not a heading
+title: Test
+---
+# Real H1 Title`,
+			expected: 4,
+		},
+		{
+			name: "VitePress frontmatter - should skip YAML comment",
+			content: `---
+# https://vitepress.dev/reference/default-theme-home-page
+layout: home
+---
+# Real Title`,
+			expected: 4,
+		},
+		{
+			name: "frontmatter without YAML comment",
+			content: `---
+title: Test
+layout: page
+---
+# Title After Frontmatter`,
+			expected: 4,
+		},
+		{
+			name:     "no frontmatter - normal behavior",
+			content:  "# Title\nContent",
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewMarkerHandler(DefaultMarker)
+			got := h.FindFirstHeading([]byte(tt.content))
+			if got != tt.expected {
+				t.Errorf("FindFirstHeading() = %d, want %d", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMarkerHandler_FindMarkers_WithFrontmatter(t *testing.T) {
+	tests := []struct {
+		name      string
+		content   string
+		wantStart int
+		wantEnd   int
+		wantFound bool
+	}{
+		{
+			name: "marker inside frontmatter should be ignored",
+			content: `---
+# Comment
+<!--TOC-->
+title: Test
+---
+# Title
+<!--TOC-->
+Content`,
+			wantStart: 6,
+			wantEnd:   -1,
+			wantFound: true,
+		},
+		{
+			name: "markers after frontmatter",
+			content: `---
+title: Test
+---
+# Title
+<!--TOC-->
+TOC content
+<!--TOC-->
+Rest`,
+			wantStart: 4,
+			wantEnd:   6,
+			wantFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewMarkerHandler(DefaultMarker)
+			got := h.FindMarkers([]byte(tt.content))
+
+			if got.StartLine != tt.wantStart {
+				t.Errorf("StartLine = %d, want %d", got.StartLine, tt.wantStart)
+			}
+			if got.EndLine != tt.wantEnd {
+				t.Errorf("EndLine = %d, want %d", got.EndLine, tt.wantEnd)
+			}
+			if got.Found != tt.wantFound {
+				t.Errorf("Found = %v, want %v", got.Found, tt.wantFound)
+			}
+		})
+	}
+}
+
+func TestMarkerHandler_FindH1Lines_WithFrontmatter(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected []int
+	}{
+		{
+			name: "YAML comment should not be detected as H1",
+			content: `---
+# YAML comment
+title: Test
+---
+# Real H1
+## Section`,
+			expected: []int{4},
+		},
+		{
+			name: "multiple H1 after frontmatter",
+			content: `---
+title: Test
+---
+# Chapter 1
+## Section 1.1
+# Chapter 2`,
+			expected: []int{3, 5},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewMarkerHandler(DefaultMarker)
+			got := h.FindH1Lines([]byte(tt.content))
+
+			if len(got) != len(tt.expected) {
+				t.Fatalf("FindH1Lines() returned %d lines, want %d. Got: %v", len(got), len(tt.expected), got)
+			}
+			for i, line := range got {
+				if line != tt.expected[i] {
+					t.Errorf("FindH1Lines()[%d] = %d, want %d", i, line, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestMarkerHandler_InsertTOCAfterFirstHeading_WithFrontmatter(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		toc      string
+		contains []string
+		excludes []string
+	}{
+		{
+			name: "should insert after frontmatter, not inside",
+			content: `---
+# YAML comment
+title: Test
+---
+# Real Title
+Content`,
+			toc: "- [Section](#section)",
+			contains: []string{
+				"---\n# YAML comment\ntitle: Test\n---", // frontmatter should be intact
+				"# Real Title",
+				"<!--TOC-->",
+				"- [Section](#section)",
+			},
+			excludes: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewMarkerHandler(DefaultMarker)
+			got := string(h.InsertTOCAfterFirstHeading([]byte(tt.content), tt.toc))
+
+			for _, s := range tt.contains {
+				if !strings.Contains(got, s) {
+					t.Errorf("InsertTOCAfterFirstHeading() should contain %q, got:\n%s", s, got)
+				}
+			}
+
+			for _, s := range tt.excludes {
+				if strings.Contains(got, s) {
+					t.Errorf("InsertTOCAfterFirstHeading() should NOT contain %q, got:\n%s", s, got)
+				}
+			}
+		})
+	}
+}

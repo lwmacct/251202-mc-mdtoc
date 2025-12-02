@@ -5,6 +5,32 @@ import (
 	"strings"
 )
 
+// FindFrontmatterEnd 查找 YAML frontmatter 的结束位置
+// 返回 frontmatter 结束行号 (0-based)，如果没有 frontmatter 则返回 -1
+// YAML frontmatter 必须从文件第一行开始，以 "---" 标记
+func FindFrontmatterEnd(lines [][]byte) int {
+	if len(lines) == 0 {
+		return -1
+	}
+
+	// 检查第一行是否为 frontmatter 开始标记
+	firstLine := bytes.TrimSpace(lines[0])
+	if !bytes.Equal(firstLine, []byte("---")) {
+		return -1
+	}
+
+	// 查找结束标记 (第二个 "---" 或 "...")
+	for i := 1; i < len(lines); i++ {
+		trimmed := bytes.TrimSpace(lines[i])
+		if bytes.Equal(trimmed, []byte("---")) || bytes.Equal(trimmed, []byte("...")) {
+			return i
+		}
+	}
+
+	// 没有找到结束标记，说明 frontmatter 未闭合
+	return -1
+}
+
 // MarkerHandler 处理 <!--TOC--> 标记
 type MarkerHandler struct {
 	marker string
@@ -19,13 +45,21 @@ func NewMarkerHandler(marker string) *MarkerHandler {
 }
 
 // FindMarkers 查找 TOC 标记位置
+// 注意：会跳过 YAML frontmatter 内部的标记
 func (h *MarkerHandler) FindMarkers(content []byte) *TOCMarker {
 	lines := bytes.Split(content, []byte("\n"))
 	markerBytes := []byte(h.marker)
 
+	// 找到 frontmatter 结束位置
+	frontmatterEnd := FindFrontmatterEnd(lines)
+	startLine := 0
+	if frontmatterEnd >= 0 {
+		startLine = frontmatterEnd + 1 // 从 frontmatter 之后开始搜索
+	}
+
 	var positions []int
-	for i, line := range lines {
-		trimmed := bytes.TrimSpace(line)
+	for i := startLine; i < len(lines); i++ {
+		trimmed := bytes.TrimSpace(lines[i])
 		if bytes.Equal(trimmed, markerBytes) {
 			positions = append(positions, i)
 		}
@@ -117,12 +151,20 @@ func (h *MarkerHandler) ExtractExistingTOC(content []byte) string {
 
 // FindFirstHeading 查找第一个标题所在行 (0-based)
 // 返回 -1 表示未找到标题
+// 注意：会跳过 YAML frontmatter 内部的内容
 func (h *MarkerHandler) FindFirstHeading(content []byte) int {
 	lines := bytes.Split(content, []byte("\n"))
 	inCodeBlock := false
 
-	for i, line := range lines {
-		trimmed := bytes.TrimSpace(line)
+	// 找到 frontmatter 结束位置
+	frontmatterEnd := FindFrontmatterEnd(lines)
+	startLine := 0
+	if frontmatterEnd >= 0 {
+		startLine = frontmatterEnd + 1 // 从 frontmatter 之后开始搜索
+	}
+
+	for i := startLine; i < len(lines); i++ {
+		trimmed := bytes.TrimSpace(lines[i])
 
 		// 检测代码块
 		if bytes.HasPrefix(trimmed, []byte("```")) || bytes.HasPrefix(trimmed, []byte("~~~")) {
@@ -203,13 +245,21 @@ type SectionTOC struct {
 }
 
 // FindH1Lines 查找所有 H1 标题的行号 (0-based)
+// 注意：会跳过 YAML frontmatter 内部的内容
 func (h *MarkerHandler) FindH1Lines(content []byte) []int {
 	lines := bytes.Split(content, []byte("\n"))
 	inCodeBlock := false
 	var h1Lines []int
 
-	for i, line := range lines {
-		trimmed := bytes.TrimSpace(line)
+	// 找到 frontmatter 结束位置
+	frontmatterEnd := FindFrontmatterEnd(lines)
+	startLine := 0
+	if frontmatterEnd >= 0 {
+		startLine = frontmatterEnd + 1 // 从 frontmatter 之后开始搜索
+	}
+
+	for i := startLine; i < len(lines); i++ {
+		trimmed := bytes.TrimSpace(lines[i])
 
 		// 检测代码块
 		if bytes.HasPrefix(trimmed, []byte("```")) || bytes.HasPrefix(trimmed, []byte("~~~")) {

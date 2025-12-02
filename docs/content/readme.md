@@ -42,6 +42,14 @@ mc-mdtool toc -d README.md
 
 # 使用有序列表 + 指定层级
 mc-mdtool toc -o -m 2 -M 4 README.md
+
+# 多文件处理
+mc-mdtool toc file1.md file2.md file3.md
+mc-mdtool toc -i docs/*.md
+
+# 管道输入 (从 stdin 读取文件列表)
+find . -name "*.md" | mc-mdtool toc
+find . -name "*.md" | mc-mdtool toc -i
 ```
 
 ### toc 命令选项

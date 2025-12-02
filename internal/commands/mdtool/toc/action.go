@@ -1,10 +1,12 @@
 package toc
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/lwmacct/251202-mc-mdtool/internal/mdtoc"
 	"github.com/urfave/cli/v3"
@@ -22,17 +24,6 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	ordered := cmd.Bool("ordered")
 	lineNumber := cmd.Bool("line-number")
 
-	// 获取文件参数
-	file := cmd.Args().First()
-	if file == "" {
-		return fmt.Errorf("请指定要处理的 Markdown 文件")
-	}
-
-	// 检查文件是否存在
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		return fmt.Errorf("文件不存在: %s", file)
-	}
-
 	// 验证层级参数
 	if minLevel < 1 || minLevel > 6 {
 		return fmt.Errorf("min-level 必须在 1-6 之间")
@@ -44,8 +35,15 @@ func action(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("min-level 不能大于 max-level")
 	}
 
+	// 收集要处理的文件
+	files := collectFiles(cmd.Args().Slice())
+	if len(files) == 0 {
+		return fmt.Errorf("请指定要处理的 Markdown 文件")
+	}
+
 	slog.Debug("处理 Markdown 文件",
-		"file", file,
+		"files", files,
+		"count", len(files),
 		"min_level", minLevel,
 		"max_level", maxLevel,
 		"in_place", inPlace,
@@ -65,41 +63,149 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	// 根据模式执行不同操作
 	switch {
 	case diff:
-		// 检查差异模式
+		return processDiff(toc, files)
+	case inPlace:
+		return processInPlace(toc, files)
+	default:
+		return processStdout(toc, files)
+	}
+}
+
+// collectFiles 收集要处理的文件列表
+// 优先从命令行参数获取，如果没有则尝试从 stdin 读取
+func collectFiles(args []string) []string {
+	var files []string
+
+	// 从命令行参数收集
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		if arg != "" {
+			files = append(files, arg)
+		}
+	}
+
+	// 如果没有参数，尝试从 stdin 读取
+	if len(files) == 0 && !isTerminal(os.Stdin) {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line != "" {
+				files = append(files, line)
+			}
+		}
+	}
+
+	return files
+}
+
+// isTerminal 检查文件是否是终端
+func isTerminal(f *os.File) bool {
+	stat, err := f.Stat()
+	if err != nil {
+		return true
+	}
+	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// processDiff 检查差异模式 - 任一文件有差异返回非零
+func processDiff(toc *mdtoc.TOC, files []string) error {
+	hasAnyDiff := false
+
+	for _, file := range files {
+		if err := checkFileExists(file); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+			continue
+		}
+
 		hasDiff, err := toc.CheckDiff(file)
 		if err != nil {
-			return fmt.Errorf("检查差异失败: %w", err)
+			fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+			continue
 		}
-		if hasDiff {
-			fmt.Fprintln(os.Stderr, "TOC 需要更新")
-			os.Exit(ExitCodeDiff)
-		}
-		fmt.Println("TOC 已是最新")
-		return nil
 
-	case inPlace:
-		// 原地更新模式
+		if hasDiff {
+			fmt.Fprintf(os.Stderr, "%s: TOC 需要更新\n", file)
+			hasAnyDiff = true
+		} else {
+			fmt.Printf("%s: TOC 已是最新\n", file)
+		}
+	}
+
+	if hasAnyDiff {
+		os.Exit(ExitCodeDiff)
+	}
+	return nil
+}
+
+// processInPlace 原地更新模式
+func processInPlace(toc *mdtoc.TOC, files []string) error {
+	var errors []string
+
+	for _, file := range files {
+		if err := checkFileExists(file); err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", file, err))
+			continue
+		}
+
 		hasMarker, err := toc.HasMarker(file)
 		if err != nil {
-			return fmt.Errorf("检查标记失败: %w", err)
+			errors = append(errors, fmt.Sprintf("%s: %v", file, err))
+			continue
 		}
+
 		if !hasMarker {
-			return fmt.Errorf("文件中未找到 %s 标记", mdtoc.DefaultMarker)
+			fmt.Fprintf(os.Stderr, "%s: 跳过 (未找到 %s 标记)\n", file, mdtoc.DefaultMarker)
+			continue
 		}
 
 		if err := toc.UpdateFile(file); err != nil {
-			return fmt.Errorf("更新文件失败: %w", err)
+			errors = append(errors, fmt.Sprintf("%s: %v", file, err))
+			continue
 		}
-		fmt.Printf("已更新 %s 的目录\n", file)
-		return nil
 
-	default:
-		// 输出到 stdout 模式
+		fmt.Printf("%s: 已更新\n", file)
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("部分文件处理失败:\n%s", strings.Join(errors, "\n"))
+	}
+	return nil
+}
+
+// processStdout 输出到 stdout 模式
+func processStdout(toc *mdtoc.TOC, files []string) error {
+	for i, file := range files {
+		if err := checkFileExists(file); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+			continue
+		}
+
 		tocStr, err := toc.GenerateFromFile(file)
 		if err != nil {
-			return fmt.Errorf("生成 TOC 失败: %w", err)
+			fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+			continue
 		}
+
+		// 多文件时添加文件名标题
+		if len(files) > 1 {
+			fmt.Printf("## %s\n\n", file)
+		}
+
 		fmt.Println(tocStr)
-		return nil
+
+		// 多文件时添加分隔
+		if len(files) > 1 && i < len(files)-1 {
+			fmt.Println()
+		}
 	}
+
+	return nil
+}
+
+// checkFileExists 检查文件是否存在
+func checkFileExists(file string) error {
+	if _, err := os.Stat(file); os.IsNotExist(err) {
+		return fmt.Errorf("文件不存在")
+	}
+	return nil
 }

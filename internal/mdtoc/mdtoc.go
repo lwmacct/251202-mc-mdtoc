@@ -109,6 +109,9 @@ func (t *TOC) GenerateSectionTOCsWithOffset(cleanContent []byte) ([]SectionTOC, 
 	t.options.LineNumber = origLineNumber
 	t.generator = NewGenerator(t.options)
 
+	// 将干净内容按行分割，用于检查 H1 后是否有空行
+	cleanLines := bytes.Split(cleanContent, []byte("\n"))
+
 	// 第二遍：计算累积偏移量并应用到标题行号
 	var sectionTOCs []SectionTOC
 	cumulativeOffset := 0
@@ -120,11 +123,20 @@ func (t *TOC) GenerateSectionTOCsWithOffset(cleanContent []byte) ([]SectionTOC, 
 		// 保存原始 H1 行号（在干净内容中的位置，用于插入定位）
 		originalH1Line := info.section.Title.Line
 
+		// 检查 H1 后是否有空行（会被 InsertSectionTOCs 跳过）
+		h1LineIdx := originalH1Line - 1 // 转换为 0-based
+		hasEmptyLineAfterH1 := h1LineIdx+1 < len(cleanLines) && len(bytes.TrimSpace(cleanLines[h1LineIdx+1])) == 0
+
+		// 实际增加的行数：TOC 块行数 - 1（如果 H1 后有空行被跳过）
+		actualAddedLines := tocBlockLines
+		if hasEmptyLineAfterH1 {
+			actualAddedLines-- // 跳过了 H1 后的空行
+		}
+
 		// 调整子标题的行号（这些行号显示在 TOC 中）
-		// 需要加上：1) 之前所有 TOC 块的累积偏移 2) 当前 TOC 块的行数
 		for _, h := range info.section.SubHeaders {
-			h.Line += cumulativeOffset + tocBlockLines
-			h.EndLine += cumulativeOffset + tocBlockLines
+			h.Line += cumulativeOffset + actualAddedLines
+			h.EndLine += cumulativeOffset + actualAddedLines
 		}
 
 		// 生成带正确行号的 TOC
@@ -137,7 +149,7 @@ func (t *TOC) GenerateSectionTOCsWithOffset(cleanContent []byte) ([]SectionTOC, 
 		}
 
 		// 累加偏移量
-		cumulativeOffset += tocBlockLines
+		cumulativeOffset += actualAddedLines
 	}
 
 	return sectionTOCs, nil

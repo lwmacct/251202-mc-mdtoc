@@ -308,17 +308,32 @@ func (h *MarkerHandler) InsertSectionTOCs(content []byte, sectionTOCs []SectionT
 		}
 	}
 
+	// 标记需要跳过的行（H1 后的空行，因为 TOC 块会自己添加空行）
+	skipLines := make(map[int]bool)
+	for h1Line := range h1ToTOC {
+		// 检查 H1 后面的行是否为空行
+		if h1Line+1 < len(lines) && len(bytes.TrimSpace(lines[h1Line+1])) == 0 {
+			skipLines[h1Line+1] = true
+		}
+	}
+
 	for i, line := range lines {
+		// 跳过 H1 后原有的空行（TOC 块会自己添加）
+		if skipLines[i] {
+			continue
+		}
+
 		result = append(result, line)
 
 		// 检查是否需要在此行后插入 TOC
 		if toc, ok := h1ToTOC[i]; ok {
-			result = append(result, []byte(""))
-			result = append(result, []byte(h.marker))
-			result = append(result, []byte(""))
-			result = append(result, []byte(toc))
-			result = append(result, []byte(""))
-			result = append(result, []byte(h.marker))
+			result = append(result, []byte(""))           // 空行（开始标记前）
+			result = append(result, []byte(h.marker))    // <!--TOC-->
+			result = append(result, []byte(""))           // 空行（开始标记后）
+			result = append(result, []byte(toc))          // TOC 内容
+			result = append(result, []byte(""))           // 空行（结束标记前）
+			result = append(result, []byte(h.marker))    // <!--TOC-->
+			result = append(result, []byte(""))           // 空行（结束标记后）
 		}
 	}
 
@@ -404,8 +419,8 @@ func (h *MarkerHandler) UpdateSectionTOCs(content []byte, sectionTOCs []SectionT
 }
 
 // CleanTOCBlocks 删除所有 TOC 块，返回干净的内容
-// 删除的内容包括：TOC 块本身 + 块前的一个空行（如果有）
-// 保留块后的空行，因为 InsertSectionTOCs 不会在末尾添加空行
+// 删除的内容包括：TOC 块本身 + 块前的一个空行 + 块后的一个空行
+// 确保 H1 和 H2 之间只保留原始的一个空行（如果有）
 func (h *MarkerHandler) CleanTOCBlocks(content []byte) ([]byte, []TOCBlockInfo) {
 	lines := bytes.Split(content, []byte("\n"))
 	markerBytes := []byte(h.marker)
@@ -445,9 +460,26 @@ func (h *MarkerHandler) CleanTOCBlocks(content []byte) ([]byte, []TOCBlockInfo) 
 			deleteLines[i] = true
 		}
 
-		// 检查块前是否有空行需要删除
+		// 检查块前是否有空行需要删除（开始标记前的空行）
 		if block.startLine > 0 && len(bytes.TrimSpace(lines[block.startLine-1])) == 0 {
 			deleteLines[block.startLine-1] = true
+		}
+
+		// 检查块后是否有空行需要删除（结束标记后的空行）
+		// 删除结束标记后连续的所有空行，只保留一个
+		afterEnd := block.endLine + 1
+		emptyCount := 0
+		for afterEnd < len(lines) && len(bytes.TrimSpace(lines[afterEnd])) == 0 {
+			emptyCount++
+			if emptyCount > 1 {
+				// 只保留一个空行，多余的删除
+				deleteLines[afterEnd] = true
+			}
+			afterEnd++
+		}
+		// 如果只有一个空行，也删除它（因为 InsertSectionTOCs 会添加）
+		if emptyCount == 1 {
+			deleteLines[block.endLine+1] = true
 		}
 
 		blockInfos = append(blockInfos, TOCBlockInfo{
@@ -476,12 +508,12 @@ type TOCBlockInfo struct {
 }
 
 // CalcTOCBlockLines 计算插入一个 TOC 块会增加多少行
-// 格式：空行 + <!--TOC--> + 空行 + TOC内容 + 空行 + <!--TOC-->
-// 返回：5 + TOC内容行数
+// 格式：空行 + <!--TOC--> + 空行 + TOC内容 + 空行 + <!--TOC--> + 空行
+// 返回：6 + TOC内容行数
 func CalcTOCBlockLines(tocContent string) int {
 	if tocContent == "" {
 		return 0
 	}
 	contentLines := strings.Count(tocContent, "\n") + 1
-	return 5 + contentLines // 1(空行) + 1(开始标记) + 1(空行) + N(内容) + 1(空行) + 1(结束标记)
+	return 6 + contentLines // 1(空行) + 1(开始标记) + 1(空行) + N(内容) + 1(空行) + 1(结束标记) + 1(空行)
 }

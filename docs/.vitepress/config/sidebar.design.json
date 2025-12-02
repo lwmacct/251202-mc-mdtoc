@@ -1,0 +1,10 @@
+[
+  {
+    "text": "设计文档",
+    "items": [
+      { "text": "开发计划", "link": "/design/mdtoc-design" },
+      { "text": "解析器调研", "link": "/design/markdown-parsers" },
+      { "text": "格式化调研", "link": "/design/markdown-fmt" }
+    ]
+  }
+]

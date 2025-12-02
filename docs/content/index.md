@@ -3,21 +3,26 @@
 layout: home
 
 hero:
-  name: "任务模板"
-  text: "Task Template"
-  tagline: 开箱即用的项目开发模板
+  name: "mc-mdtool"
+  text: "Markdown CLI 工具集"
+  tagline: 目录生成、格式化、检查等功能
   actions:
     - theme: brand
       text: 快速开始
       link: /guide/quick-start
+    - theme: alt
+      text: 设计文档
+      link: /design/mdtoc-design
 
 features:
-  - title: Pre-commit
-    details: 使用 Pre-commit 框架管理多语言 Git 钩子
-  - title: Taskfile
-    details: 使用 Taskfile 管理项目 CLI 命令
-  - title: Dev Container
-    details: 使用 Dev Container 创建一致的开发环境
+  - title: toc - 目录生成
+    details: 生成 GitHub 风格的 Table of Contents，支持原地更新
+  - title: fmt - 格式化
+    details: 参考 Prettier 设计，统一 Markdown 代码风格
+  - title: lint - 规范检查
+    details: 检查 Markdown 文件是否符合规范
+  - title: links - 链接检查
+    details: 检查文档中的链接是否有效
 ---
 
 <!--@include: ./readme.md-->

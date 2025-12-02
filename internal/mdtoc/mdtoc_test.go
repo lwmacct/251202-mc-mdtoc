@@ -388,58 +388,145 @@ Old TOC content
 		}
 	})
 
-	t.Run("CheckDiff_NoDiff", func(t *testing.T) {
-		// 创建一个 TOC 已经是最新的文件（章节模式，只包含子标题）
-		// 先生成正确的 TOC，然后检查是否无差异
-		toc := mdtoc.New(mdtoc.DefaultOptions())
-
-		// 创建原始文件
-		origContent := `# Title
-
-## Section 1
-`
-		filePath := filepath.Join(tmpDir, "no_diff.md")
-		if err := os.WriteFile(filePath, []byte(origContent), 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		// 先更新 TOC
-		if err := toc.UpdateFile(filePath); err != nil {
-			t.Fatal(err)
-		}
-
-		// 然后检查是否无差异
-		hasDiff, err := toc.CheckDiff(filePath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if hasDiff {
-			t.Error("CheckDiff() should return false when TOC is up to date")
-		}
-	})
-
-	t.Run("CheckDiff_HasDiff", func(t *testing.T) {
-		toc := mdtoc.New(mdtoc.DefaultOptions())
-
+	t.Run("DeleteTOC_WithMarker", func(t *testing.T) {
 		content := `# Title
 
 <!--TOC-->
 
-- [Old Section](#old-section)
+- [Section 1](#section-1) ` + "`:10:15`" + `
+- [Section 2](#section-2) ` + "`:16:20`" + `
 
 <!--TOC-->
 
 ## Section 1
-`
-		filePath := filepath.Join(tmpDir, "has_diff.md")
-		os.WriteFile(filePath, []byte(content), 0644)
 
-		hasDiff, err := toc.CheckDiff(filePath)
+Content here...
+
+## Section 2
+
+More content...
+`
+		filePath := filepath.Join(tmpDir, "delete_with_marker.md")
+		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		toc := mdtoc.New(mdtoc.DefaultOptions())
+		deleted, err := toc.DeleteTOC(filePath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !hasDiff {
-			t.Error("CheckDiff() should return true when TOC needs update")
+		if !deleted {
+			t.Error("DeleteTOC() should return true when TOC was deleted")
+		}
+
+		updated, _ := os.ReadFile(filePath)
+		updatedStr := string(updated)
+
+		// TOC 标记应该被删除
+		if strings.Contains(updatedStr, "<!--TOC-->") {
+			t.Error("Deleted file should NOT contain TOC markers")
+		}
+		// TOC 内容应该被删除
+		if strings.Contains(updatedStr, "[Section 1](#section-1)") {
+			t.Error("Deleted file should NOT contain TOC links")
+		}
+		// 标题内容应该保留
+		if !strings.Contains(updatedStr, "# Title") {
+			t.Error("Deleted file should still contain the title")
+		}
+		if !strings.Contains(updatedStr, "## Section 1") {
+			t.Error("Deleted file should still contain section headers")
+		}
+	})
+
+	t.Run("DeleteTOC_WithoutMarker", func(t *testing.T) {
+		content := `# Title
+
+## Section 1
+
+Content here...
+`
+		filePath := filepath.Join(tmpDir, "delete_without_marker.md")
+		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		toc := mdtoc.New(mdtoc.DefaultOptions())
+		deleted, err := toc.DeleteTOC(filePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if deleted {
+			t.Error("DeleteTOC() should return false when no TOC to delete")
+		}
+
+		// 文件内容应该保持不变
+		updated, _ := os.ReadFile(filePath)
+		if string(updated) != content {
+			t.Error("File without TOC should remain unchanged after DeleteTOC()")
+		}
+	})
+
+	t.Run("DeleteTOC_MultipleTOCBlocks", func(t *testing.T) {
+		// 章节模式的文件有多个 TOC 块
+		content := `# Chapter 1
+
+<!--TOC-->
+
+- [Section 1.1](#section-11)
+
+<!--TOC-->
+
+## Section 1.1
+
+Content...
+
+# Chapter 2
+
+<!--TOC-->
+
+- [Section 2.1](#section-21)
+
+<!--TOC-->
+
+## Section 2.1
+
+More content...
+`
+		filePath := filepath.Join(tmpDir, "delete_multiple_toc.md")
+		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		toc := mdtoc.New(mdtoc.DefaultOptions())
+		deleted, err := toc.DeleteTOC(filePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !deleted {
+			t.Error("DeleteTOC() should return true when TOCs were deleted")
+		}
+
+		updated, _ := os.ReadFile(filePath)
+		updatedStr := string(updated)
+
+		// 所有 TOC 标记都应该被删除
+		if strings.Contains(updatedStr, "<!--TOC-->") {
+			t.Error("All TOC markers should be deleted")
+		}
+		// 章节标题应该保留
+		if !strings.Contains(updatedStr, "# Chapter 1") {
+			t.Error("Chapter 1 should be preserved")
+		}
+		if !strings.Contains(updatedStr, "# Chapter 2") {
+			t.Error("Chapter 2 should be preserved")
+		}
+		if !strings.Contains(updatedStr, "## Section 1.1") {
+			t.Error("Section 1.1 should be preserved")
+		}
+		if !strings.Contains(updatedStr, "## Section 2.1") {
+			t.Error("Section 2.1 should be preserved")
 		}
 	})
 }

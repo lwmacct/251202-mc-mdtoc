@@ -29,10 +29,10 @@ func Command() *cli.Command {
 				Usage:   "原地更新文件 (在 <!--TOC--> 标记处插入)",
 			},
 			&cli.BoolFlag{
-				Name:    "diff",
-				Aliases: []string{"d"},
-				Usage:   "检查 TOC 是否需要更新 (返回码 128 表示有差异)",
-			},
+			Name:    "delete",
+			Aliases: []string{"d"},
+			Usage:   "删除文件中的 TOC 标记和内容",
+		},
 			&cli.BoolFlag{
 				Name:    "ordered",
 				Aliases: []string{"o"},

@@ -11,15 +11,12 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// ExitCodeDiff 是 --diff 检测到差异时的退出码
-const ExitCodeDiff = 128
-
 func action(ctx context.Context, cmd *cli.Command) error {
 	// 解析命令行参数
 	minLevel := cmd.Int("min-level")
 	maxLevel := cmd.Int("max-level")
 	inPlace := cmd.Bool("in-place")
-	diff := cmd.Bool("diff")
+	deleteMode := cmd.Bool("delete")
 	ordered := cmd.Bool("ordered")
 	lineNumber := cmd.Bool("line-number")
 	showPath := cmd.Bool("path")
@@ -58,13 +55,10 @@ func action(ctx context.Context, cmd *cli.Command) error {
 
 	// 根据模式执行不同操作
 	switch {
-	case diff:
-		// diff 和 inPlace 模式强制启用 ShowAnchor（写入文件必须有链接）
-		writeOpts := baseOpts
-		writeOpts.ShowAnchor = true
-		return processDiff(mdtoc.New(writeOpts), files)
+	case deleteMode:
+		return processDelete(mdtoc.New(baseOpts), files)
 	case inPlace:
-		// diff 和 inPlace 模式强制启用 ShowAnchor（写入文件必须有链接）
+		// inPlace 模式强制启用 ShowAnchor（写入文件必须有链接）
 		writeOpts := baseOpts
 		writeOpts.ShowAnchor = true
 		return processInPlace(mdtoc.New(writeOpts), files)
@@ -109,32 +103,31 @@ func isTerminal(f *os.File) bool {
 	return (stat.Mode() & os.ModeCharDevice) != 0
 }
 
-// processDiff 检查差异模式 - 任一文件有差异返回非零
-func processDiff(toc *mdtoc.TOC, files []string) error {
-	hasAnyDiff := false
+// processDelete 删除模式 - 删除文件中的 TOC
+func processDelete(toc *mdtoc.TOC, files []string) error {
+	var errors []string
 
 	for _, file := range files {
 		if err := checkFileExists(file); err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+			errors = append(errors, fmt.Sprintf("%s: %v", file, err))
 			continue
 		}
 
-		hasDiff, err := toc.CheckDiff(file)
+		deleted, err := toc.DeleteTOC(file)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+			errors = append(errors, fmt.Sprintf("%s: %v", file, err))
 			continue
 		}
 
-		if hasDiff {
-			fmt.Fprintf(os.Stderr, "%s: TOC 需要更新\n", file)
-			hasAnyDiff = true
+		if deleted {
+			fmt.Printf("%s: TOC 已删除\n", file)
 		} else {
-			fmt.Printf("%s: TOC 已是最新\n", file)
+			fmt.Printf("%s: 无 TOC 标记\n", file)
 		}
 	}
 
-	if hasAnyDiff {
-		os.Exit(ExitCodeDiff)
+	if len(errors) > 0 {
+		return fmt.Errorf("部分文件处理失败:\n%s", strings.Join(errors, "\n"))
 	}
 	return nil
 }

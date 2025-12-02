@@ -224,34 +224,6 @@ func (t *TOC) UpdateFile(filename string) error {
 	return os.WriteFile(filename, newContent, 0644)
 }
 
-// CheckDiff 检查 TOC 是否需要更新
-// 返回 true 表示需要更新 (有差异)
-func (t *TOC) CheckDiff(filename string) (bool, error) {
-	content, err := os.ReadFile(filename)
-	if err != nil {
-		return false, err
-	}
-
-	if t.options.SectionTOC {
-		// 章节模式：生成新内容并与原内容比较
-		cleanContent, _ := t.marker.CleanTOCBlocks(content)
-		sectionTOCs, err := t.GenerateSectionTOCsWithOffset(cleanContent)
-		if err != nil {
-			return false, err
-		}
-		newContent := t.marker.InsertSectionTOCs(cleanContent, sectionTOCs)
-		return !bytes.Equal(content, newContent), nil
-	}
-
-	// 普通模式：比较 TOC 内容
-	newTOC, err := t.GenerateFromContent(content)
-	if err != nil {
-		return false, err
-	}
-	existingTOC := t.marker.ExtractExistingTOC(content)
-	return newTOC != existingTOC, nil
-}
-
 // HasMarker 检查文件是否包含 TOC 标记
 func (t *TOC) HasMarker(filename string) (bool, error) {
 	content, err := os.ReadFile(filename)
@@ -260,4 +232,27 @@ func (t *TOC) HasMarker(filename string) (bool, error) {
 	}
 	markers := t.marker.FindMarkers(content)
 	return markers.Found, nil
+}
+
+// DeleteTOC 删除文件中的所有 TOC 块
+// 返回是否有内容被删除
+func (t *TOC) DeleteTOC(filename string) (bool, error) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return false, err
+	}
+
+	cleanContent, blockInfos := t.marker.CleanTOCBlocks(content)
+
+	// 没有 TOC 块被删除
+	if len(blockInfos) == 0 {
+		return false, nil
+	}
+
+	// 写入清理后的内容
+	if err := os.WriteFile(filename, cleanContent, 0644); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }

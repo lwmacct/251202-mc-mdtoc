@@ -26,7 +26,7 @@ Options:
   -m, --min-level    最小标题层级 (默认 1)
   -M, --max-level    最大标题层级 (默认 3)
   -i, --in-place     原地更新文件
-  -d, --diff         检查差异 (返回码 128 表示有差异)
+  -d, --delete       删除文件中的 TOC 标记和内容
   -o, --ordered      有序列表
   -L, --line-number  显示行号范围 :start:end (默认启用)
   -p, --path         显示文件路径 path:start:end
@@ -42,7 +42,7 @@ Options:
 | 锚点生成    | GitHub 规范 anchor link           | ✅ 已完成 |
 | TOC 标记    | 支持 `<!--TOC-->` 标记定位        | ✅ 已完成 |
 | 原地更新    | `-i` 直接修改文件                 | ✅ 已完成 |
-| 差异检测    | `-d` 检查 TOC 是否需要更新        | ✅ 已完成 |
+| TOC 删除    | `-d` 删除文件中的 TOC             | ✅ 已完成 |
 | 有序列表    | `-o` 生成 `1. 2. 3.` 格式         | ✅ 已完成 |
 | 行号范围    | `-L` 显示 `:start:end`            | ✅ 已完成 |
 | 文件路径    | `-p` 显示 `path:start:end`        | ✅ 已完成 |

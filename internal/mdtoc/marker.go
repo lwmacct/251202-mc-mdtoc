@@ -402,3 +402,86 @@ func (h *MarkerHandler) UpdateSectionTOCs(content []byte, sectionTOCs []SectionT
 	// 我们需要根据 H1 的文本内容来匹配
 	return h.InsertSectionTOCs(cleanedContent, sectionTOCs)
 }
+
+// CleanTOCBlocks 删除所有 TOC 块，返回干净的内容
+// 删除的内容包括：TOC 块本身 + 块前的一个空行（如果有）
+// 保留块后的空行，因为 InsertSectionTOCs 不会在末尾添加空行
+func (h *MarkerHandler) CleanTOCBlocks(content []byte) ([]byte, []TOCBlockInfo) {
+	lines := bytes.Split(content, []byte("\n"))
+	markerBytes := []byte(h.marker)
+
+	// 找到所有现有的 TOC 区块 (成对的 <!--TOC-->)
+	type tocBlock struct {
+		startLine int
+		endLine   int
+	}
+	var existingBlocks []tocBlock
+
+	var pendingStart = -1
+	for i, line := range lines {
+		trimmed := bytes.TrimSpace(line)
+		if bytes.Equal(trimmed, markerBytes) {
+			if pendingStart == -1 {
+				pendingStart = i
+			} else {
+				existingBlocks = append(existingBlocks, tocBlock{pendingStart, i})
+				pendingStart = -1
+			}
+		}
+	}
+
+	// 如果没有 TOC 块，返回原内容
+	if len(existingBlocks) == 0 {
+		return content, nil
+	}
+
+	// 收集 TOC 块信息并标记要删除的行
+	deleteLines := make(map[int]bool)
+	var blockInfos []TOCBlockInfo
+
+	for _, block := range existingBlocks {
+		// 标记 TOC 块内所有行需要删除
+		for i := block.startLine; i <= block.endLine; i++ {
+			deleteLines[i] = true
+		}
+
+		// 检查块前是否有空行需要删除
+		if block.startLine > 0 && len(bytes.TrimSpace(lines[block.startLine-1])) == 0 {
+			deleteLines[block.startLine-1] = true
+		}
+
+		blockInfos = append(blockInfos, TOCBlockInfo{
+			StartLine:  block.startLine,
+			EndLine:    block.endLine,
+			TotalLines: len(deleteLines),
+		})
+	}
+
+	// 构建干净的内容
+	var cleanedLines [][]byte
+	for i, line := range lines {
+		if !deleteLines[i] {
+			cleanedLines = append(cleanedLines, line)
+		}
+	}
+
+	return bytes.Join(cleanedLines, []byte("\n")), blockInfos
+}
+
+// TOCBlockInfo 记录 TOC 块的位置信息
+type TOCBlockInfo struct {
+	StartLine  int // 开始行 (0-based)
+	EndLine    int // 结束行 (0-based)
+	TotalLines int // 块占用的总行数（包括前后空行）
+}
+
+// CalcTOCBlockLines 计算插入一个 TOC 块会增加多少行
+// 格式：空行 + <!--TOC--> + 空行 + TOC内容 + 空行 + <!--TOC-->
+// 返回：5 + TOC内容行数
+func CalcTOCBlockLines(tocContent string) int {
+	if tocContent == "" {
+		return 0
+	}
+	contentLines := strings.Count(tocContent, "\n") + 1
+	return 5 + contentLines // 1(空行) + 1(开始标记) + 1(空行) + N(内容) + 1(空行) + 1(结束标记)
+}

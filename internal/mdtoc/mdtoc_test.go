@@ -387,23 +387,26 @@ Old TOC content
 	})
 
 	t.Run("CheckDiff_NoDiff", func(t *testing.T) {
-		// 创建一个 TOC 已经是最新的文件
+		// 创建一个 TOC 已经是最新的文件（章节模式，只包含子标题）
+		// 先生成正确的 TOC，然后检查是否无差异
 		toc := mdtoc.New(mdtoc.DefaultOptions())
 
-		content := `# Title
-
-<!--TOC-->
-
-- [Title](#title)
-  - [Section 1](#section-1)
-
-<!--TOC-->
+		// 创建原始文件
+		origContent := `# Title
 
 ## Section 1
 `
 		filePath := filepath.Join(tmpDir, "no_diff.md")
-		os.WriteFile(filePath, []byte(content), 0644)
+		if err := os.WriteFile(filePath, []byte(origContent), 0644); err != nil {
+			t.Fatal(err)
+		}
 
+		// 先更新 TOC
+		if err := toc.UpdateFile(filePath); err != nil {
+			t.Fatal(err)
+		}
+
+		// 然后检查是否无差异
 		hasDiff, err := toc.CheckDiff(filePath)
 		if err != nil {
 			t.Fatal(err)

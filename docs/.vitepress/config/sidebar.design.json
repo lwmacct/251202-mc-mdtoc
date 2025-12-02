@@ -1,5 +1,11 @@
 [
   {
+    "text": "设计文档",
+    "items": [
+      { "text": "概览", "link": "/design/" }
+    ]
+  },
+  {
     "text": "子命令设计",
     "items": [
       { "text": "toc - 目录生成", "link": "/design/cmd-toc" },

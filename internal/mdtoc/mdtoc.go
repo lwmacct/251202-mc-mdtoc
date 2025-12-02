@@ -1,6 +1,7 @@
 package mdtoc
 
 import (
+	"bytes"
 	"os"
 	"strings"
 )
@@ -67,6 +68,81 @@ func (t *TOC) GenerateSectionTOCs(content []byte) ([]SectionTOC, error) {
 	return sectionTOCs, nil
 }
 
+// GenerateSectionTOCsWithOffset 生成章节模式的 TOC，预计算偏移量使行号一次正确
+// 这个方法解决了需要执行两次 toc 命令才能得到正确行号的问题
+func (t *TOC) GenerateSectionTOCsWithOffset(cleanContent []byte) ([]SectionTOC, error) {
+	// 在干净内容上解析所有标题（基准行号）
+	headers, err := t.parser.ParseAllHeaders(cleanContent)
+	if err != nil {
+		return nil, err
+	}
+
+	// 按 H1 分割成章节
+	sections := SplitSections(headers)
+
+	// 第一遍：计算每个章节的 TOC 内容行数
+	type sectionInfo struct {
+		section   *Section
+		tocLines  int    // TOC 内容行数
+		tocString string // TOC 字符串（不带行号的临时版本）
+	}
+	var infos []sectionInfo
+
+	// 临时禁用行号生成，只计算 TOC 结构
+	origLineNumber := t.options.LineNumber
+	t.options.LineNumber = false
+	t.generator = NewGenerator(t.options)
+
+	for _, section := range sections {
+		toc := t.generator.GenerateSection(section)
+		if toc != "" {
+			tocLines := strings.Count(toc, "\n") + 1
+			infos = append(infos, sectionInfo{
+				section:   section,
+				tocLines:  tocLines,
+				tocString: toc,
+			})
+		}
+	}
+
+	// 恢复行号设置
+	t.options.LineNumber = origLineNumber
+	t.generator = NewGenerator(t.options)
+
+	// 第二遍：计算累积偏移量并应用到标题行号
+	var sectionTOCs []SectionTOC
+	cumulativeOffset := 0
+
+	for _, info := range infos {
+		// 计算这个 TOC 块会增加的行数
+		tocBlockLines := CalcTOCBlockLines(info.tocString)
+
+		// 保存原始 H1 行号（在干净内容中的位置，用于插入定位）
+		originalH1Line := info.section.Title.Line
+
+		// 调整子标题的行号（这些行号显示在 TOC 中）
+		// 需要加上：1) 之前所有 TOC 块的累积偏移 2) 当前 TOC 块的行数
+		for _, h := range info.section.SubHeaders {
+			h.Line += cumulativeOffset + tocBlockLines
+			h.EndLine += cumulativeOffset + tocBlockLines
+		}
+
+		// 生成带正确行号的 TOC
+		toc := t.generator.GenerateSection(info.section)
+		if toc != "" {
+			sectionTOCs = append(sectionTOCs, SectionTOC{
+				H1Line: originalH1Line - 1, // 使用干净内容中的行号（0-based），用于定位插入位置
+				TOC:    toc,
+			})
+		}
+
+		// 累加偏移量
+		cumulativeOffset += tocBlockLines
+	}
+
+	return sectionTOCs, nil
+}
+
 // GenerateSectionTOCsPreview 生成章节模式的 TOC 预览 (用于 stdout 输出)
 func (t *TOC) GenerateSectionTOCsPreview(content []byte) (string, error) {
 	// 解析所有标题
@@ -107,11 +183,17 @@ func (t *TOC) UpdateFile(filename string) error {
 
 	if t.options.SectionTOC {
 		// 章节模式：在每个 H1 后插入独立的子目录
-		sectionTOCs, err := t.GenerateSectionTOCs(content)
+		// 先清理现有 TOC 块，获取干净内容
+		cleanContent, _ := t.marker.CleanTOCBlocks(content)
+
+		// 使用预计算偏移量的方法生成 TOC
+		sectionTOCs, err := t.GenerateSectionTOCsWithOffset(cleanContent)
 		if err != nil {
 			return err
 		}
-		newContent = t.marker.UpdateSectionTOCs(content, sectionTOCs)
+
+		// 在干净内容上插入新的 TOC
+		newContent = t.marker.InsertSectionTOCs(cleanContent, sectionTOCs)
 	} else {
 		// 普通模式：在 <!--TOC--> 标记处插入完整 TOC
 		toc, err := t.GenerateFromContent(content)
@@ -138,16 +220,23 @@ func (t *TOC) CheckDiff(filename string) (bool, error) {
 		return false, err
 	}
 
-	// 生成新的 TOC
+	if t.options.SectionTOC {
+		// 章节模式：生成新内容并与原内容比较
+		cleanContent, _ := t.marker.CleanTOCBlocks(content)
+		sectionTOCs, err := t.GenerateSectionTOCsWithOffset(cleanContent)
+		if err != nil {
+			return false, err
+		}
+		newContent := t.marker.InsertSectionTOCs(cleanContent, sectionTOCs)
+		return !bytes.Equal(content, newContent), nil
+	}
+
+	// 普通模式：比较 TOC 内容
 	newTOC, err := t.GenerateFromContent(content)
 	if err != nil {
 		return false, err
 	}
-
-	// 提取现有 TOC
 	existingTOC := t.marker.ExtractExistingTOC(content)
-
-	// 比较
 	return newTOC != existingTOC, nil
 }
 

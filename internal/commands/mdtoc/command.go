@@ -6,10 +6,10 @@ import "github.com/urfave/cli/v3"
 func Command(version string) *cli.Command {
 	return &cli.Command{
 		Name:    "mc-mdtoc",
-		Usage:   "Markdown TOC 生成工具",
+		Usage:   "生成和查看 Markdown 文档的大纲 (TOC)",
 		Version: version,
 		UsageText: `mc-mdtoc [options] <file>...
-   fd -e md | mc-mdtoc`,
+fd -e md | mc-mdtoc`,
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:    "min-level",

@@ -332,3 +332,257 @@ func TestParser_ParseAllHeaders(t *testing.T) {
 		}
 	}
 }
+
+// ==================== YAML Frontmatter Line Number Tests ====================
+
+func TestParser_LineNumbers_WithFrontmatter(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected []struct {
+			text    string
+			line    int
+			endLine int
+		}
+	}{
+		{
+			name: "basic frontmatter - line numbers should include frontmatter offset",
+			content: `---
+title: Test Document
+author: Test
+---
+# Title
+
+## Section 1
+Content...
+
+## Section 2
+More content...
+`,
+			expected: []struct {
+				text    string
+				line    int
+				endLine int
+			}{
+				{"Title", 5, 11},     // H1 at line 5 (after 4 lines of frontmatter)
+				{"Section 1", 7, 9},  // H2 at line 7
+				{"Section 2", 10, 11}, // H2 at line 10
+			},
+		},
+		{
+			name: "frontmatter with YAML comment - should not parse as header",
+			content: `---
+# This is a YAML comment, not a Markdown header
+title: Test
+layout: page
+---
+# Real Title
+
+## Section 1
+Content here
+`,
+			expected: []struct {
+				text    string
+				line    int
+				endLine int
+			}{
+				{"Real Title", 6, 9},  // H1 at line 6
+				{"Section 1", 8, 9},   // H2 at line 8
+			},
+		},
+		{
+			name: "VitePress style frontmatter",
+			content: `---
+# https://vitepress.dev/reference/default-theme-home-page
+layout: home
+hero:
+  name: My Project
+---
+# Getting Started
+
+## Installation
+Install the package...
+
+## Usage
+Use the package...
+`,
+			expected: []struct {
+				text    string
+				line    int
+				endLine int
+			}{
+				{"Getting Started", 7, 13}, // H1 at line 7
+				{"Installation", 9, 11},    // H2 at line 9
+				{"Usage", 12, 13},          // H2 at line 12
+			},
+		},
+		{
+			name: "Hugo style frontmatter with dots closer",
+			content: `---
+title: Hugo Page
+date: 2024-01-01
+...
+# Page Title
+
+## First Section
+Content
+
+## Second Section
+More content
+`,
+			expected: []struct {
+				text    string
+				line    int
+				endLine int
+			}{
+				{"Page Title", 5, 11},      // H1 at line 5
+				{"First Section", 7, 9},   // H2 at line 7
+				{"Second Section", 10, 11}, // H2 at line 10
+			},
+		},
+		{
+			name: "no frontmatter - baseline",
+			content: `# Title
+
+## Section 1
+Content...
+
+## Section 2
+More content...
+`,
+			expected: []struct {
+				text    string
+				line    int
+				endLine int
+			}{
+				{"Title", 1, 7},      // H1 at line 1
+				{"Section 1", 3, 5},  // H2 at line 3
+				{"Section 2", 6, 7},  // H2 at line 6
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewParser(DefaultOptions())
+			got, err := p.Parse([]byte(tt.content))
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			if len(got) != len(tt.expected) {
+				t.Fatalf("Parse() returned %d headers, want %d\nHeaders: %+v",
+					len(got), len(tt.expected), got)
+			}
+
+			for i, h := range got {
+				exp := tt.expected[i]
+				if h.Text != exp.text {
+					t.Errorf("Header[%d].Text = %q, want %q", i, h.Text, exp.text)
+				}
+				if h.Line != exp.line {
+					t.Errorf("Header[%d].Line = %d, want %d (text: %q)",
+						i, h.Line, exp.line, h.Text)
+				}
+				if h.EndLine != exp.endLine {
+					t.Errorf("Header[%d].EndLine = %d, want %d (text: %q)",
+						i, h.EndLine, exp.endLine, h.Text)
+				}
+			}
+		})
+	}
+}
+
+func TestParser_LineNumbers_FrontmatterWithTOCMarker(t *testing.T) {
+	// Test that <!--TOC--> markers inside frontmatter don't affect parsing
+	content := `---
+title: Test
+# Note: <!--TOC--> in frontmatter should be ignored
+description: A test file
+---
+# Main Title
+
+<!--TOC-->
+
+- [Section 1](#section-1)
+
+<!--TOC-->
+
+## Section 1
+Content here
+
+## Section 2
+More content
+`
+	p := NewParser(DefaultOptions())
+	got, err := p.Parse([]byte(content))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	expected := []struct {
+		text    string
+		line    int
+		endLine int
+	}{
+		{"Main Title", 6, 18},  // H1 at line 6
+		{"Section 1", 14, 16},  // H2 at line 14
+		{"Section 2", 17, 18},  // H2 at line 17
+	}
+
+	if len(got) != len(expected) {
+		t.Fatalf("Parse() returned %d headers, want %d", len(got), len(expected))
+	}
+
+	for i, h := range got {
+		exp := expected[i]
+		if h.Text != exp.text {
+			t.Errorf("Header[%d].Text = %q, want %q", i, h.Text, exp.text)
+		}
+		if h.Line != exp.line {
+			t.Errorf("Header[%d].Line = %d, want %d (text: %q)",
+				i, h.Line, exp.line, h.Text)
+		}
+		if h.EndLine != exp.endLine {
+			t.Errorf("Header[%d].EndLine = %d, want %d (text: %q)",
+				i, h.EndLine, exp.endLine, h.Text)
+		}
+	}
+}
+
+func TestParser_CountLines_WithFrontmatter(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected int
+	}{
+		{
+			name: "with frontmatter",
+			content: `---
+title: Test
+---
+# Title
+Content`,
+			expected: 5,
+		},
+		{
+			name: "with frontmatter and trailing newline",
+			content: `---
+title: Test
+---
+# Title
+Content
+`,
+			expected: 5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := countLines([]byte(tt.content))
+			if got != tt.expected {
+				t.Errorf("countLines() = %d, want %d", got, tt.expected)
+			}
+		})
+	}
+}

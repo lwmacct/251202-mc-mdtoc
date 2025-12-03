@@ -35,12 +35,25 @@ func (p *Parser) Parse(content []byte) ([]*Header, error) {
 	// 重置锚点生成器
 	p.anchor.Reset()
 
+	// 检测并跳过 frontmatter
+	lines := bytes.Split(content, []byte("\n"))
+	frontmatterEnd := FindFrontmatterEnd(lines)
+	lineOffset := 0
+	parseContent := content
+
+	if frontmatterEnd >= 0 {
+		// 有 frontmatter，只解析 frontmatter 之后的内容
+		lineOffset = frontmatterEnd + 1
+		// 重新组装 frontmatter 之后的内容
+		parseContent = bytes.Join(lines[lineOffset:], []byte("\n"))
+	}
+
 	// 预计算行号映射 (byte offset -> line number)
-	lineMap := buildLineMap(content)
+	lineMap := buildLineMap(parseContent)
 	totalLines := countLines(content)
 
 	// 解析为 AST
-	reader := text.NewReader(content)
+	reader := text.NewReader(parseContent)
 	doc := p.md.Parser().Parse(reader)
 
 	var headers []*Header
@@ -62,13 +75,13 @@ func (p *Parser) Parse(content []byte) ([]*Header, error) {
 		}
 
 		// 提取标题文本
-		text := extractText(content, heading)
+		text := extractText(parseContent, heading)
 
 		// 生成 anchor link
 		anchor := p.anchor.Generate(text)
 
-		// 获取行号
-		line := getNodeLine(heading, lineMap)
+		// 获取行号（需要加上 frontmatter 的偏移）
+		line := getNodeLine(heading, lineMap) + lineOffset
 
 		headers = append(headers, &Header{
 			Level:      heading.Level,
@@ -162,10 +175,24 @@ func extractText(src []byte, n ast.Node) string {
 // 用于章节模式，需要完整的标题层级信息
 func (p *Parser) ParseAllHeaders(content []byte) ([]*Header, error) {
 	p.anchor.Reset()
-	lineMap := buildLineMap(content)
+
+	// 检测并跳过 frontmatter
+	lines := bytes.Split(content, []byte("\n"))
+	frontmatterEnd := FindFrontmatterEnd(lines)
+	lineOffset := 0
+	parseContent := content
+
+	if frontmatterEnd >= 0 {
+		// 有 frontmatter，只解析 frontmatter 之后的内容
+		lineOffset = frontmatterEnd + 1
+		// 重新组装 frontmatter 之后的内容
+		parseContent = bytes.Join(lines[lineOffset:], []byte("\n"))
+	}
+
+	lineMap := buildLineMap(parseContent)
 	totalLines := countLines(content)
 
-	reader := text.NewReader(content)
+	reader := text.NewReader(parseContent)
 	doc := p.md.Parser().Parse(reader)
 
 	var headers []*Header
@@ -180,9 +207,9 @@ func (p *Parser) ParseAllHeaders(content []byte) ([]*Header, error) {
 			return ast.WalkContinue, nil
 		}
 
-		text := extractText(content, heading)
+		text := extractText(parseContent, heading)
 		anchor := p.anchor.Generate(text)
-		line := getNodeLine(heading, lineMap)
+		line := getNodeLine(heading, lineMap) + lineOffset
 
 		headers = append(headers, &Header{
 			Level:      heading.Level,

@@ -133,13 +133,8 @@ func (t *TOC) GenerateSectionTOCsWithOffset(cleanContent []byte) ([]SectionTOC, 
 			actualAddedLines-- // 跳过了 H1 后的空行
 		}
 
-		// 调整子标题的行号（这些行号显示在 TOC 中）
-		for _, h := range info.section.SubHeaders {
-			h.Line += cumulativeOffset + actualAddedLines
-			h.EndLine += cumulativeOffset + actualAddedLines
-		}
-
-		// 生成带正确行号的 TOC
+		// 生成 TOC (使用原始行号，不调整)
+		// 保留原始行号可以让用户看到内容在原始文件中的位置
 		toc := t.generator.GenerateSection(info.section)
 		if toc != "" {
 			sectionTOCs = append(sectionTOCs, SectionTOC{

@@ -650,3 +650,350 @@ func BenchmarkTOC_Generate(b *testing.B) {
 		_, _ = toc.GenerateFromContent(content)
 	}
 }
+
+// ==================== YAML Frontmatter Line Number Integration Tests ====================
+
+// TestTOC_LineNumbers_WithFrontmatter 测试带 YAML frontmatter 的文件行号计算
+func TestTOC_LineNumbers_WithFrontmatter(t *testing.T) {
+	tests := []struct {
+		name            string
+		content         string
+		expectedLineNums []string // 期望的行号格式 (如 `:5+7`, `:7+3`)
+	}{
+		{
+			name: "basic frontmatter",
+			content: `---
+title: Test Document
+author: Test
+---
+# Title
+
+## Section 1
+Content...
+
+## Section 2
+More content...
+`,
+			// Title at line 5, Section 1 at line 7, Section 2 at line 10
+			expectedLineNums: []string{`:5+`, `:7+`, `:10+`},
+		},
+		{
+			name: "VitePress style frontmatter with YAML comment",
+			content: `---
+# https://vitepress.dev/reference/default-theme-home-page
+layout: home
+hero:
+  name: My Project
+---
+# Getting Started
+
+## Installation
+Install the package...
+
+## Usage
+Use the package...
+`,
+			// Getting Started at line 7, Installation at line 9, Usage at line 12
+			expectedLineNums: []string{`:7+`, `:9+`, `:12+`},
+		},
+		{
+			name: "Hugo style frontmatter with dots closer",
+			content: `---
+title: Hugo Page
+date: 2024-01-01
+...
+# Page Title
+
+## First Section
+Content
+
+## Second Section
+More content
+`,
+			// Page Title at line 5, First Section at line 7, Second Section at line 10
+			expectedLineNums: []string{`:5+`, `:7+`, `:10+`},
+		},
+		{
+			name: "no frontmatter baseline",
+			content: `# Title
+
+## Section 1
+Content...
+
+## Section 2
+More content...
+`,
+			// Title at line 1, Section 1 at line 3, Section 2 at line 6
+			expectedLineNums: []string{`:1+`, `:3+`, `:6+`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			toc := mdtoc.New(mdtoc.Options{
+				MinLevel:   1,
+				MaxLevel:   3,
+				LineNumber: true,
+				ShowAnchor: true,
+			})
+			got, err := toc.GenerateFromContent([]byte(tt.content))
+			if err != nil {
+				t.Fatalf("GenerateFromContent() error = %v", err)
+			}
+
+			for _, lineNum := range tt.expectedLineNums {
+				if !strings.Contains(got, lineNum) {
+					t.Errorf("TOC should contain line number %q, got:\n%s", lineNum, got)
+				}
+			}
+		})
+	}
+}
+
+// TestTOC_UpdateFile_WithFrontmatter 测试带 frontmatter 的文件更新
+func TestTOC_UpdateFile_WithFrontmatter(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name            string
+		content         string
+		expectedLineNums []string
+	}{
+		{
+			name: "section mode with frontmatter",
+			content: `---
+title: Test
+layout: page
+---
+# Chapter 1
+
+## Section 1.1
+Content here
+
+## Section 1.2
+More content
+`,
+			// In section mode, only sub-headers get line numbers
+			// Section 1.1 at line 7, Section 1.2 at line 10
+			expectedLineNums: []string{`:7+`, `:10+`},
+		},
+		{
+			name: "frontmatter with YAML comment should not affect line numbers",
+			content: `---
+# This is a YAML comment
+title: Test
+---
+# Real Title
+
+## Section A
+First section content
+
+## Section B
+Second section content
+`,
+			// Section A at line 7, Section B at line 10
+			expectedLineNums: []string{`:7+`, `:10+`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filePath := filepath.Join(tmpDir, tt.name+".md")
+			if err := os.WriteFile(filePath, []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			toc := mdtoc.New(mdtoc.Options{
+				MinLevel:   2,
+				MaxLevel:   3,
+				LineNumber: true,
+				SectionTOC: true,
+				ShowAnchor: true,
+			})
+			if err := toc.UpdateFile(filePath); err != nil {
+				t.Fatal(err)
+			}
+
+			updated, _ := os.ReadFile(filePath)
+			updatedStr := string(updated)
+
+			for _, lineNum := range tt.expectedLineNums {
+				if !strings.Contains(updatedStr, lineNum) {
+					t.Errorf("Updated file should contain line number %q, got:\n%s", lineNum, updatedStr)
+				}
+			}
+		})
+	}
+}
+
+// TestTOC_SectionMode_WithFrontmatter 测试带 frontmatter 的章节模式
+func TestTOC_SectionMode_WithFrontmatter(t *testing.T) {
+	content := `---
+# https://vitepress.dev/reference
+title: Documentation
+description: Project docs
+---
+# 第一章
+
+## 1.1 概述
+
+## 1.2 详情
+
+# 第二章
+
+## 2.1 功能
+
+### 2.1.1 子功能
+
+# 第三章
+
+只有介绍，没有子标题。
+`
+	toc := mdtoc.New(mdtoc.Options{
+		MinLevel:   2,
+		MaxLevel:   3,
+		SectionTOC: true,
+		ShowAnchor: true,
+		LineNumber: true,
+	})
+
+	preview, err := toc.GenerateSectionTOCsPreview([]byte(content))
+	if err != nil {
+		t.Fatalf("GenerateSectionTOCsPreview() error = %v", err)
+	}
+
+	// 验证章节标题存在且行号正确
+	// 1.1 概述 at line 8
+	if !strings.Contains(preview, "[1.1 概述]") {
+		t.Error("Preview should contain section 1.1")
+	}
+	if !strings.Contains(preview, `:8+`) {
+		t.Errorf("Preview should contain line number :8+, got:\n%s", preview)
+	}
+
+	// 第三章无子标题，不应出现在预览中
+	if strings.Contains(preview, "第三章") {
+		t.Error("Preview should NOT contain chapter 3 (no sub-headers)")
+	}
+}
+
+// TestTOC_FrontmatterPreservedAfterUpdate 测试更新后 frontmatter 保持完整
+func TestTOC_FrontmatterPreservedAfterUpdate(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	content := `---
+title: Test Document
+author: Test Author
+date: 2024-01-01
+tags:
+  - test
+  - documentation
+---
+# Main Title
+
+## Section 1
+
+Content here
+
+## Section 2
+
+More content
+`
+	filePath := filepath.Join(tmpDir, "preserve_frontmatter.md")
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	toc := mdtoc.New(mdtoc.Options{
+		MinLevel:   2,
+		MaxLevel:   3,
+		SectionTOC: true,
+		ShowAnchor: true,
+		LineNumber: true,
+	})
+	if err := toc.UpdateFile(filePath); err != nil {
+		t.Fatal(err)
+	}
+
+	updated, _ := os.ReadFile(filePath)
+	updatedStr := string(updated)
+
+	// Frontmatter 应该完整保留
+	expectedFrontmatterParts := []string{
+		"---",
+		"title: Test Document",
+		"author: Test Author",
+		"date: 2024-01-01",
+		"tags:",
+		"  - test",
+		"  - documentation",
+	}
+	for _, part := range expectedFrontmatterParts {
+		if !strings.Contains(updatedStr, part) {
+			t.Errorf("Frontmatter should contain %q, got:\n%s", part, updatedStr)
+		}
+	}
+
+	// TOC 应该正确插入
+	if !strings.Contains(updatedStr, "<!--TOC-->") {
+		t.Error("Updated file should contain TOC markers")
+	}
+	if !strings.Contains(updatedStr, "[Section 1]") {
+		t.Error("Updated file should contain Section 1 link")
+	}
+}
+
+// TestTOC_DeleteTOC_WithFrontmatter 测试带 frontmatter 的文件删除 TOC
+func TestTOC_DeleteTOC_WithFrontmatter(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	content := `---
+title: Test
+---
+# Title
+
+<!--TOC-->
+
+- [Section 1](#section-1) ` + "`:7+4`" + `
+
+<!--TOC-->
+
+## Section 1
+
+Content
+`
+	filePath := filepath.Join(tmpDir, "delete_with_frontmatter.md")
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	toc := mdtoc.New(mdtoc.DefaultOptions())
+	deleted, err := toc.DeleteTOC(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !deleted {
+		t.Error("DeleteTOC() should return true")
+	}
+
+	updated, _ := os.ReadFile(filePath)
+	updatedStr := string(updated)
+
+	// Frontmatter 应该保留
+	if !strings.Contains(updatedStr, "---\ntitle: Test\n---") {
+		t.Error("Frontmatter should be preserved after deleting TOC")
+	}
+
+	// TOC 应该被删除
+	if strings.Contains(updatedStr, "<!--TOC-->") {
+		t.Error("TOC markers should be deleted")
+	}
+
+	// 标题应该保留
+	if !strings.Contains(updatedStr, "# Title") {
+		t.Error("Title should be preserved")
+	}
+	if !strings.Contains(updatedStr, "## Section 1") {
+		t.Error("Section headers should be preserved")
+	}
+}

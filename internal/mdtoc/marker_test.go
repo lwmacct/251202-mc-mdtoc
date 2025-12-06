@@ -183,8 +183,8 @@ func TestMarkerHandler_FindH1Lines(t *testing.T) {
 			expected: []int{0, 2, 4},
 		},
 		{
-			name: "H1 in code block ignored",
-			content: "# Real H1\n```\n# Not H1\n```\n# Another H1",
+			name:     "H1 in code block ignored",
+			content:  "# Real H1\n```\n# Not H1\n```\n# Another H1",
 			expected: []int{0, 4},
 		},
 		{
@@ -800,5 +800,317 @@ Content`,
 				}
 			}
 		})
+	}
+}
+
+// ==================== Enhanced Marker Handling Tests ====================
+
+// TestFindAllMarkers 测试查找所有标记
+func TestFindAllMarkers(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected []int
+	}{
+		{
+			name:     "no markers",
+			content:  "# Title\nContent",
+			expected: []int{},
+		},
+		{
+			name:     "single marker",
+			content:  "# Title\n<!--TOC-->\nContent",
+			expected: []int{1},
+		},
+		{
+			name:     "multiple markers",
+			content:  "# Title\n<!--TOC-->\nContent\n<!--TOC-->\nMore\n<!--TOC-->\nEnd",
+			expected: []int{1, 3, 5},
+		},
+		{
+			name:     "markers with whitespace",
+			content:  "# Title\n  <!--TOC-->  \n  <!--TOC-->  ",
+			expected: []int{1, 2},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewMarkerHandler(DefaultMarker)
+			got := h.FindAllMarkers([]byte(tt.content))
+
+			if len(got) != len(tt.expected) {
+				t.Errorf("FindAllMarkers() returned %d markers, want %d", len(got), len(tt.expected))
+			}
+
+			for i, expected := range tt.expected {
+				if i < len(got) && got[i] != expected {
+					t.Errorf("FindAllMarkers()[%d] = %d, want %d", i, got[i], expected)
+				}
+			}
+		})
+	}
+}
+
+// TestInsertTOCWithCleanup 测试带清理的插入 TOC
+func TestInsertTOCWithCleanup(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		toc      string
+		expected string
+	}{
+		{
+			name:     "no markers - unchanged",
+			content:  "# Title\nContent",
+			toc:      "- [Title](#title)",
+			expected: "# Title\nContent",
+		},
+		{
+			name: "single marker - creates pair",
+			content: `# Title
+<!--TOC-->
+Content`,
+			toc: "- [Title](#title)",
+			expected: `# Title
+<!--TOC-->
+
+- [Title](#title)
+
+<!--TOC-->
+Content`,
+		},
+		{
+			name: "two markers - standard replacement",
+			content: `# Title
+<!--TOC-->
+Old TOC
+<!--TOC-->
+Content`,
+			toc: "- [Title](#title)",
+			expected: `# Title
+<!--TOC-->
+
+- [Title](#title)
+
+<!--TOC-->
+Content`,
+		},
+		{
+			name: "three markers - removes extra",
+			content: `# Title
+<!--TOC-->
+Old TOC 1
+<!--TOC-->
+Content
+<!--TOC-->
+More`,
+			toc: "- [Title](#title)",
+			expected: `# Title
+<!--TOC-->
+
+- [Title](#title)
+
+<!--TOC-->
+Content
+More`,
+		},
+		{
+			name: "four markers - keeps first two, removes rest",
+			content: `# Title
+<!--TOC-->
+TOC 1
+<!--TOC-->
+Content 1
+<!--TOC-->
+TOC 2
+<!--TOC-->
+Content 2`,
+			toc: "- [Title](#title)",
+			expected: `# Title
+<!--TOC-->
+
+- [Title](#title)
+
+<!--TOC-->
+Content 1
+Content 2`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewMarkerHandler(DefaultMarker)
+			got := string(h.InsertTOCWithCleanup([]byte(tt.content), tt.toc))
+
+			if got != tt.expected {
+				t.Errorf("\n=== Test failed: %s ===\n\nGot:\n%s\n\nExpected:\n%s", tt.name, got, tt.expected)
+			}
+
+			// 验证结果没有孤儿标记
+			valid, count, msg := h.ValidateMarkers([]byte(got))
+			if !valid {
+				t.Errorf("Result has invalid markers: %s (count: %d)", msg, count)
+			}
+		})
+	}
+}
+
+// TestValidateMarkers 测试标记验证
+func TestValidateMarkers(t *testing.T) {
+	tests := []struct {
+		name        string
+		content     string
+		expectValid bool
+		expectCount int
+		expectError string
+	}{
+		{
+			name:        "no markers",
+			content:     "# Title\nContent",
+			expectValid: true,
+			expectCount: 0,
+			expectError: "",
+		},
+		{
+			name:        "paired markers",
+			content:     "# Title\n<!--TOC-->\nTOC\n<!--TOC-->\nContent",
+			expectValid: true,
+			expectCount: 2,
+			expectError: "",
+		},
+		{
+			name:        "odd number of markers",
+			content:     "# Title\n<!--TOC-->\nContent\n<!--TOC-->\nMore\n<!--TOC-->",
+			expectValid: false,
+			expectCount: 3,
+			expectError: "文档中有奇数个 TOC 标记，这是无效的",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewMarkerHandler(DefaultMarker)
+			valid, count, msg := h.ValidateMarkers([]byte(tt.content))
+
+			if valid != tt.expectValid {
+				t.Errorf("ValidateMarkers() validity = %v, want %v", valid, tt.expectValid)
+			}
+			if count != tt.expectCount {
+				t.Errorf("ValidateMarkers() count = %d, want %d", count, tt.expectCount)
+			}
+			if msg != tt.expectError {
+				t.Errorf("ValidateMarkers() error = %q, want %q", msg, tt.expectError)
+			}
+		})
+	}
+}
+
+// TestCleanupOrphanMarkers 测试清理孤儿标记
+func TestCleanupOrphanMarkers(t *testing.T) {
+	tests := []struct {
+		name            string
+		content         string
+		expectedResult  string
+		expectedRemoved int
+	}{
+		{
+			name:            "no markers",
+			content:         "# Title\nContent",
+			expectedResult:  "# Title\nContent",
+			expectedRemoved: 0,
+		},
+		{
+			name:            "even markers",
+			content:         "# Title\n<!--TOC-->\nTOC\n<!--TOC-->\nContent",
+			expectedResult:  "# Title\n<!--TOC-->\nTOC\n<!--TOC-->\nContent",
+			expectedRemoved: 0,
+		},
+		{
+			name:            "odd markers - removes last",
+			content:         "# Title\n<!--TOC-->\nTOC\n<!--TOC-->\nContent\n<!--TOC-->",
+			expectedResult:  "# Title\n<!--TOC-->\nTOC\n<!--TOC-->\nContent",
+			expectedRemoved: 1,
+		},
+		{
+			name:            `single marker - removes it`,
+			content:         "# Title\nContent\n<!--TOC-->",
+			expectedResult:  "# Title\nContent",
+			expectedRemoved: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewMarkerHandler(DefaultMarker)
+			result, removed := h.CleanupOrphanMarkers([]byte(tt.content))
+
+			if string(result) != tt.expectedResult {
+				t.Errorf("CleanupOrphanMarkers() result =\n%s\n\nwant:\n%s", string(result), tt.expectedResult)
+			}
+			if removed != tt.expectedRemoved {
+				t.Errorf("CleanupOrphanMarkers() removed = %d, want %d", removed, tt.expectedRemoved)
+			}
+		})
+	}
+}
+
+// TestRealWorldScenario 测试真实场景
+func TestRealWorldScenario(t *testing.T) {
+	// 模拟用户报告的问题：预先存在单个标记
+	content := `# 测试文档
+
+这是第一段内容。
+
+<!--TOC-->
+
+这是第二段内容。
+
+## 章节1
+
+章节1的内容。
+
+## 章节2
+
+章节2的内容。
+`
+
+	h := NewMarkerHandler(DefaultMarker)
+	toc := "- [章节1](#章节1)\n- [章节2](#章节2)"
+
+	// 使用新的清理方法
+	result := string(h.InsertTOCWithCleanup([]byte(content), toc))
+
+	// 验证结果
+	if !strings.Contains(result, toc) {
+		t.Error("TOC content not found in result")
+	}
+
+	// 验证标记有效性
+	valid, count, msg := h.ValidateMarkers([]byte(result))
+	if !valid {
+		t.Errorf("Result has invalid markers: %s (count: %d)", msg, count)
+	}
+
+	// 验证格式
+	expectedParts := []string{
+		"# 测试文档",
+		"<!--TOC-->",
+		toc,
+		"<!--TOC-->",
+		"这是第一段内容",
+		"这是第二段内容",
+	}
+
+	for _, part := range expectedParts {
+		if !strings.Contains(result, part) {
+			t.Errorf("Result missing expected part: %s", part)
+		}
+	}
+
+	// 确保没有多余的标记
+	markerCount := strings.Count(result, "<!--TOC-->")
+	if markerCount != 2 {
+		t.Errorf("Expected 2 markers, got %d", markerCount)
 	}
 }

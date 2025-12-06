@@ -3,7 +3,6 @@ module github.com/lwmacct/251202-mc-mdtoc
 go 1.25.4
 
 require (
-	github.com/lwmacct/251125-go-mod-logger v0.0.7
 	github.com/urfave/cli/v3 v3.6.1
 	github.com/yuin/goldmark v1.7.13
 )

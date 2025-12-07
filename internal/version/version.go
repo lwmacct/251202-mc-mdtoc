@@ -8,6 +8,7 @@
 //
 // 版本信息优先通过 go build -ldflags 在构建时注入，
 // 若未注入则自动从 runtime/debug.BuildInfo 读取（Go 1.18+）。
+// Author: lwmacct (https://github.com/lwmacct)
 package version
 
 import (
@@ -29,7 +30,6 @@ var (
 	GitCommit  string = "Unknown" // Git 提交哈希
 	BuildTime  string = "Unknown" // 构建时间
 	Developer  string = "Unknown" // 开发者/维护者
-	Workspace  string = "Unknown" // 构建时工作目录，用于去除堆栈中的绝对路径
 )
 
 // datePrefix 用于匹配项目名称前缀中的日期格式（如 "251203-"）
@@ -127,9 +127,8 @@ func PrintVersionJSON() {
   "gitCommit": "%s",
   "buildTime": "%s",
   "developer": "%s",
-  "workspace": "%s"
 }
-`, AppRawName, AppProject, AppVersion, GitCommit, BuildTime, Developer, Workspace)
+`, AppRawName, AppProject, AppVersion, GitCommit, BuildTime, Developer)
 }
 
 // GetVersion 返回应用版本号

@@ -1,7 +1,7 @@
 package mdtoc
 
 import (
-	"github.com/lwmacct/251202-mc-mdtoc/internal/command/version"
+	"github.com/lwmacct/251202-mc-mdtoc/internal/version"
 	"github.com/urfave/cli/v3"
 )
 
